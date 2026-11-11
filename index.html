@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#120F2B">
+<title>Вспышка — игра на реакцию для компании</title>
+<meta name="description" content="Браузерная игра для 2–4 игроков на одном экране: телефон на столе или клавиши на компьютере.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800;900&family=Onest:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#120F2B; --bg2:#1C1840; --text:#F4F1FF; --soft:#A9A3D6;
+  --p0:#FF5E57; --p1:#2BD99A; --p2:#FFC93C; --p3:#4DA8FF;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font:400 16px/1.4 "Onest",system-ui,sans-serif;user-select:none;-webkit-user-select:none;touch-action:none}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.screen{position:fixed;inset:0;display:none}
+.screen.on{display:block}
+
+/* ---------- меню ---------- */
+#menu{background:radial-gradient(80% 60% at 50% 0%,#2A2160,var(--bg) 70%);display:none;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:24px;text-align:center}
+#menu.on{display:flex}
+.logo{font:900 clamp(56px,13vw,150px)/.9 "Unbounded",sans-serif;letter-spacing:-.04em;position:relative}
+.logo span{display:inline-block;animation:flick 3.2s infinite}
+.logo span:nth-child(odd){animation-delay:.15s}
+@keyframes flick{0%,86%,100%{opacity:1;text-shadow:0 0 0 transparent}88%{opacity:.35}90%{opacity:1;text-shadow:0 0 34px #fff}}
+.sub{color:var(--soft);max-width:30em}
+.count{display:flex;gap:10px}
+.count button{width:64px;height:64px;border-radius:18px;background:var(--bg2);font:800 24px "Unbounded";transition:transform .15s}
+.count button[aria-pressed="true"]{background:#fff;color:var(--bg);transform:translateY(-3px)}
+.players{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.chip{display:flex;align-items:center;gap:8px;padding:8px 14px 8px 8px;border-radius:999px;background:var(--bg2);font-weight:700}
+.chip i{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:800 12px "Unbounded";color:var(--bg);font-style:normal}
+.chip small{color:var(--soft);font-weight:500}
+.go{padding:18px 44px;border-radius:999px;background:#fff;color:var(--bg);font:800 20px "Unbounded";box-shadow:0 0 0 0 rgba(255,255,255,.5);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.45)}70%{box-shadow:0 0 0 18px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
+.how{color:var(--soft);font-size:14px}
+
+/* ---------- игра ---------- */
+#game{background:var(--bg)}
+.zones{position:absolute;inset:0;display:grid}
+.zones.n2{grid-template-columns:1fr 1fr}
+.zones.n3,.zones.n4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.zone{position:relative;display:flex;padding:18px;background:color-mix(in srgb,var(--c) 10%,var(--bg));transition:background .12s}
+.zone.hit{background:color-mix(in srgb,var(--c) 55%,var(--bg))}
+.zone.bad{background:#3a0f16}
+.zone.out{opacity:.35}
+.zones.n3 .zone:nth-child(3){grid-column:1/3}
+.zone:nth-child(1){align-items:flex-start;justify-content:flex-start}
+.zone:nth-child(2){align-items:flex-start;justify-content:flex-end;text-align:right}
+.zone:nth-child(3){align-items:flex-end;justify-content:flex-start}
+.zone:nth-child(4){align-items:flex-end;justify-content:flex-end;text-align:right}
+.zones.n2 .zone:nth-child(2){align-items:flex-start}
+.zones.n2 .zone:nth-child(1),.zones.n2 .zone:nth-child(2){padding-top:22px}
+.tag b{display:block;font:800 clamp(16px,2.4vw,24px) "Unbounded";color:var(--c)}
+.tag .pts{font:900 clamp(30px,6vw,64px)/1 "Unbounded";margin-top:4px}
+.tag small{display:block;color:var(--soft);font-size:13px;margin-top:4px}
+/* на телефоне верхние игроки сидят напротив — разворачиваем их подписи */
+@media (hover:none) and (pointer:coarse){
+  .zones.n3 .zone:nth-child(1) .tag,.zones.n3 .zone:nth-child(2) .tag,
+  .zones.n4 .zone:nth-child(1) .tag,.zones.n4 .zone:nth-child(2) .tag{transform:rotate(180deg)}
+  .tag small{display:none}
+}
+
+.arena{position:absolute;left:50%;top:50%;width:min(56vmin,440px);height:min(56vmin,440px);transform:translate(-50%,-50%);
+  border-radius:50%;background:radial-gradient(circle at 50% 35%,#2A2462,#141033 70%);box-shadow:0 0 0 10px var(--bg),0 30px 80px rgba(0,0,0,.5);
+  display:grid;place-items:center;text-align:center;pointer-events:none;overflow:hidden}
+.round-no{position:absolute;top:13%;left:0;right:0;color:var(--soft);font:600 12px "Unbounded";letter-spacing:.06em}
+.stage{width:80%;display:grid;place-items:center;min-height:50%}
+.rule{font:800 clamp(18px,3.4vmin,30px)/1.15 "Unbounded"}
+.rule small{display:block;margin-top:10px;font:500 clamp(12px,2vmin,16px) "Onest";color:var(--soft)}
+.word{font:900 clamp(28px,8vmin,64px)/1 "Unbounded";letter-spacing:-.02em}
+.big{font-size:clamp(70px,22vmin,180px);line-height:1}
+.dot{width:16vmin;height:16vmin;max-width:120px;max-height:120px;border-radius:50%}
+.wait{display:flex;gap:10px}
+.wait i{width:12px;height:12px;border-radius:50%;background:var(--soft);animation:blink 1s infinite}
+.wait i:nth-child(2){animation-delay:.2s}.wait i:nth-child(3){animation-delay:.4s}
+@keyframes blink{50%{opacity:.2}}
+.pop{animation:pop .28s cubic-bezier(.2,1.6,.4,1)}
+@keyframes pop{from{transform:scale(.4);opacity:0}}
+.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.flash.go{animation:fl .35s}
+@keyframes fl{0%{opacity:.85}100%{opacity:0}}
+.toast{position:absolute;left:50%;bottom:calc(50% - min(28vmin,220px) - 52px);transform:translateX(-50%);
+  font:800 15px "Unbounded";white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .2s}
+.toast.on{opacity:1}
+.quit{position:absolute;right:50%;top:50%;transform:translate(50%,calc(min(28vmin,220px) + 18px));color:var(--soft);font-size:13px;z-index:5}
+
+/* ---------- финал ---------- */
+#final{background:radial-gradient(70% 60% at 50% 100%,#2A2160,var(--bg) 70%);display:none;flex-direction:column;align-items:center;justify-content:center;gap:26px;padding:24px;text-align:center}
+#final.on{display:flex}
+.win{font:900 clamp(34px,7vw,72px)/1 "Unbounded"}
+.podium{display:flex;align-items:flex-end;gap:12px}
+.step{width:clamp(76px,16vw,130px);border-radius:16px 16px 6px 6px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:12px;font-weight:700;color:var(--bg)}
+.step b{font:900 26px "Unbounded"}
+.step small{font-size:13px}
+canvas#confetti{position:fixed;inset:0;pointer-events:none;z-index:10}
+.made{position:fixed;bottom:12px;left:0;right:0;text-align:center;font-size:12px;color:var(--soft)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<section id="menu" class="screen on" aria-labelledby="t">
+  <h1 class="logo" id="t" aria-label="Вспышка"><span>В</span><span>С</span><span>П</span><span>Ы</span><span>Ш</span><span>К</span><span>А</span></h1>
+  <p class="sub">Игра на реакцию для компании. Положите телефон на стол — каждый жмёт на свой угол. На компьютере или ТВ у каждого своя клавиша.</p>
+  <div class="count" role="group" aria-label="Сколько игроков">
+    <button aria-pressed="false" data-n="2">2</button>
+    <button aria-pressed="true" data-n="3">3</button>
+    <button aria-pressed="false" data-n="4">4</button>
+  </div>
+  <div class="players" id="chips"></div>
+  <button class="go" id="start">Играть</button>
+  <p class="how">10 раундов. Первый, кто нажал правильно, получает очко. Нажал раньше времени — минус очко.</p>
+</section>
+
+<section id="game" class="screen">
+  <div class="zones" id="zones"></div>
+  <div class="arena" aria-live="polite">
+    <div class="round-no" id="rno"></div>
+    <div class="stage" id="stage"></div>
+    <div class="flash" id="flash"></div>
+  </div>
+  <div class="toast" id="toast"></div>
+  <button class="quit" id="quit">выйти</button>
+</section>
+
+<section id="final" class="screen">
+  <div class="win" id="winner"></div>
+  <div class="podium" id="podium"></div>
+  <button class="go" id="again">Ещё раз</button>
+</section>
+<canvas id="confetti"></canvas>
+<p class="made" id="made">Сделано Львом с помощью Claude Code</p>
+
+<script>
+const PLAYERS = [
+  {name:"Лиса", key:"a", c:"var(--p0)", hex:"#FF5E57"},
+  {name:"Мята", key:"l", c:"var(--p1)", hex:"#2BD99A"},
+  {name:"Солнце", key:"z", c:"var(--p2)", hex:"#FFC93C"},
+  {name:"Кит", key:"m", c:"var(--p3)", hex:"#4DA8FF"},
+];
+const ROUNDS = 10;
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const rnd = (a,b) => a + Math.random()*(b-a);
+const pick = a => a[Math.floor(Math.random()*a.length)];
+
+/* ---------- звук ---------- */
+let ac;
+function beep(f=600, d=.09, type="sine", v=.18){
+  try{
+    ac = ac || new (window.AudioContext||window.webkitAudioContext)();
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.value = f; g.gain.value = v;
+    g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + d);
+    o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + d);
+  }catch(e){}
+}
+const sfx = {
+  tick:()=>beep(420,.05,"square",.06),
+  go:()=>{beep(880,.08,"triangle",.2);setTimeout(()=>beep(1320,.12,"triangle",.2),70)},
+  win:()=>{[660,880,1100].forEach((f,i)=>setTimeout(()=>beep(f,.12,"triangle",.22),i*80))},
+  bad:()=>beep(140,.25,"sawtooth",.14),
+};
+
+/* ---------- меню ---------- */
+let N = 3;
+function renderChips(){
+  $("chips").innerHTML = PLAYERS.slice(0,N).map(p=>`<div class="chip"><i style="background:${p.hex}">${p.key.toUpperCase()}</i>${p.name}<small>угол или клавиша ${p.key.toUpperCase()}</small></div>`).join("");
+}
+document.querySelectorAll(".count button").forEach(b=>b.onclick=()=>{
+  N = +b.dataset.n;
+  document.querySelectorAll(".count button").forEach(x=>x.setAttribute("aria-pressed", x===b));
+  renderChips(); beep(500+N*80,.06);
+});
+renderChips();
+
+function show(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("on", s.id===id));
+  $("made").style.display = id==="game" ? "none" : "";
+}
+
+/* ---------- ввод ---------- */
+let onPress = null;               // текущий обработчик раунда: (playerIndex) => void
+const zoneEls = [];
+function press(i){
+  if(i >= N || !onPress) return;
+  onPress(i);
+}
+document.addEventListener("keydown", e=>{
+  if(e.repeat) return;
+  const i = PLAYERS.findIndex(p=>p.key===e.key.toLowerCase() || p.key===e.code?.replace("Key","").toLowerCase());
+  if(i >= 0 && $("game").classList.contains("on")) press(i);
+});
+
+function buildZones(){
+  const z = $("zones");
+  z.className = "zones n"+N;
+  z.innerHTML = "";
+  zoneEls.length = 0;
+  PLAYERS.slice(0,N).forEach((p,i)=>{
+    const el = document.createElement("div");
+    el.className = "zone"; el.style.setProperty("--c", p.c);
+    el.innerHTML = `<div class="tag"><b>${p.name}</b><div class="pts" id="pts${i}">0</div><small>клавиша ${p.key.toUpperCase()}</small></div>`;
+    el.addEventListener("pointerdown", ev=>{ev.preventDefault(); press(i);});
+    z.appendChild(el); zoneEls.push(el);
+  });
+}
+
+/* ---------- состояние ---------- */
+let score = [], locked = [], playing = false;
+function addPoint(i, d){
+  score[i] += d;
+  $("pts"+i).textContent = score[i];
+  $("pts"+i).classList.remove("pop"); void $("pts"+i).offsetWidth; $("pts"+i).classList.add("pop");
+}
+function flashZone(i, cls){
+  zoneEls[i].classList.add(cls);
+  setTimeout(()=>zoneEls[i].classList.remove(cls), 260);
+}
+function toast(text, color){
+  const t = $("toast"); t.textContent = text; t.style.color = color || "#fff";
+  t.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(()=>t.classList.remove("on"), 1100);
+}
+function stage(html){ $("stage").innerHTML = html; }
+function flash(){ const f=$("flash"); f.classList.remove("go"); void f.offsetWidth; f.classList.add("go"); }
+function foul(i){
+  if(locked[i]) return;
+  locked[i] = true; addPoint(i,-1); flashZone(i,"bad"); zoneEls[i].classList.add("out");
+  sfx.bad(); toast(`${PLAYERS[i].name}: рано! −1`, PLAYERS[i].hex);
+  if(everyoneLocked()) setTimeout(()=>{ stage(`<div class="rule pop">Все поспешили<small>идём дальше</small></div>`); finishRound(null); }, 300);
+}
+function everyoneLocked(){ return locked.slice(0,N).every(Boolean); }
+
+/* Ждём, пока раунд закончится: resolve(winnerIndex | null) */
+function roundWait(maxMs){
+  return new Promise(res=>{ roundWait.done = res; roundWait.timer = setTimeout(()=>res(null), maxMs); });
+}
+function finishRound(winner){
+  clearTimeout(roundWait.timer); onPress = null;
+  if(roundWait.done){ const d = roundWait.done; roundWait.done = null; d(winner); }
+}
+
+/* ---------- раунды ---------- */
+const COLORS = [
+  {w:"КРАСНЫЙ", c:"#FF5E57"}, {w:"ЗЕЛЁНЫЙ", c:"#2BD99A"}, {w:"ЖЁЛТЫЙ", c:"#FFC93C"},
+  {w:"СИНИЙ", c:"#4DA8FF"}, {w:"БЕЛЫЙ", c:"#FFFFFF"},
+];
+
+const MODES = [
+  { // 1. Вспышка: ждём сигнал
+    title:"Вспышка", rule:"Жмите, когда загорится звезда", hint:"Раньше времени — минус очко",
+    async run(){
+      stage(`<div class="wait"><i></i><i></i><i></i></div>`);
+      let armed = false;
+      onPress = i => { if(locked[i]) return; if(!armed) return foul(i); win(i); if(everyoneLocked()) finishRound(null); };
+      const fire = setTimeout(()=>{ armed = true; flash(); sfx.go(); stage(`<div class="big pop">★</div>`); }, rnd(1600,4200));
+      const w = await roundWait(9000); clearTimeout(fire); return w;
+    }},
+  { // 2. Цвет, а не слово
+    title:"Не верь словам", rule:"Жмите, когда слово написано ЗЕЛЁНЫМ цветом", hint:"Смотрите на цвет букв, а не на слово",
+    async run(){
+      let good = false, n = 0, timer;
+      onPress = i => { if(locked[i]) return; if(!good) return foul(i); win(i); };
+      const step = () => {
+        n++;
+        const forceGood = n > 6 && Math.random() < .5;
+        const word = pick(COLORS), color = forceGood ? COLORS[1] : pick(COLORS.filter(c=>c!==COLORS[1]).concat(Math.random()<.18?[COLORS[1]]:[]));
+        good = color === COLORS[1];
+        stage(`<div class="word pop" style="color:${color.c}">${word.w}</div>`);
+        sfx.tick();
+        timer = setTimeout(step, good ? 1150 : rnd(650,950));
+      };
+      step();
+      const w = await roundWait(14000); clearTimeout(timer); return w;
+    }},
+  { // 3. Обманка
+    title:"Только круг", rule:"Жмите, когда появится КРУГ", hint:"Квадрат и треугольник — ловушки",
+    async run(){
+      let good = false, n = 0, timer;
+      const shapes = {
+        circle:`<div class="dot pop" style="background:#2BD99A"></div>`,
+        square:`<div class="dot pop" style="background:#FF5E57;border-radius:14px"></div>`,
+        tri:`<svg class="pop" viewBox="0 0 100 100" width="120" height="120"><polygon points="50,6 96,92 4,92" fill="#FFC93C"/></svg>`,
+      };
+      onPress = i => { if(locked[i]) return; if(!good) return foul(i); win(i); };
+      const step = () => {
+        n++;
+        const k = (n > 3 && Math.random() < .4) ? "circle" : pick(["square","tri","square","tri","circle"].slice(0, n>2?5:4));
+        good = k === "circle";
+        stage(shapes[k]); sfx.tick();
+        timer = setTimeout(()=>{ stage(""); good = false; timer = setTimeout(step, rnd(250,600)); }, good ? 1000 : rnd(600,900));
+      };
+      timer = setTimeout(step, 700);
+      const w = await roundWait(14000); clearTimeout(timer); return w;
+    }},
+  { // 4. Счёт
+    title:"Ровно пять", rule:"Числа растут. Жмите, когда будет 5", hint:"На 4 или 6 — минус очко",
+    async run(){
+      let k = 0, timer;
+      onPress = i => { if(locked[i]) return; if(k !== 5) return foul(i); win(i); };
+      const step = () => {
+        k++;
+        stage(`<div class="big pop">${k}</div>`); sfx.tick();
+        if(k < 8) timer = setTimeout(step, rnd(550,1000));
+        else timer = setTimeout(()=>finishRound(null), 900);
+      };
+      timer = setTimeout(step, 600);
+      const w = await roundWait(11000); clearTimeout(timer); return w;
+    }},
+  { // 5. Пара
+    title:"Пара", rule:"Жмите, когда два значка совпадут", hint:"Значки меняются всё быстрее",
+    async run(){
+      const icons = ["🍕","🎈","🐙","⚡","🍩","🎸"];
+      let same = false, n = 0, timer;
+      onPress = i => { if(locked[i]) return; if(!same) return foul(i); win(i); };
+      const step = () => {
+        n++;
+        const a = pick(icons); let b = pick(icons);
+        if(n > 4 && Math.random() < .35) b = a;
+        same = a === b;
+        stage(`<div class="word pop" style="font-size:clamp(46px,13vmin,100px)">${a}&nbsp;${b}</div>`); sfx.tick();
+        timer = setTimeout(step, same ? 1200 : Math.max(420, 950 - n*40));
+      };
+      step();
+      const w = await roundWait(14000); clearTimeout(timer); return w;
+    }},
+];
+
+function win(i){
+  addPoint(i, 1); flashZone(i, "hit"); sfx.win();
+  toast(`${PLAYERS[i].name} +1`, PLAYERS[i].hex);
+  stage(`<div class="rule pop" style="color:${PLAYERS[i].hex}">${PLAYERS[i].name}<small>успел первым</small></div>`);
+  finishRound(i);
+}
+
+async function game(){
+  playing = true;
+  score = new Array(N).fill(0);
+  buildZones(); show("game");
+  const order = [];
+  while(order.length < ROUNDS){ const m = MODES.slice().sort(()=>Math.random()-.5); order.push(...m); }
+  for(let r = 0; r < ROUNDS && playing; r++){
+    const mode = order[r];
+    locked = new Array(N).fill(false);
+    zoneEls.forEach(z=>z.classList.remove("out"));
+    $("rno").textContent = `РАУНД ${r+1} ИЗ ${ROUNDS}`;
+    stage(`<div class="rule pop">${mode.title}<small>${mode.rule}<br>${mode.hint}</small></div>`);
+    beep(520,.1,"triangle",.15);
+    await sleep(2300);
+    if(!playing) return;
+    const w = await mode.run();
+    if(!playing) return;
+    if(w === null && !$("stage").textContent.includes("успел")) stage(`<div class="rule pop">Никто не успел<small>идём дальше</small></div>`);
+    await sleep(1300);
+  }
+  if(playing) finale();
+}
+
+/* ---------- финал ---------- */
+function finale(){
+  playing = false;
+  const ranked = PLAYERS.slice(0,N).map((p,i)=>({...p, s:score[i]})).sort((a,b)=>b.s-a.s);
+  const top = ranked.filter(p=>p.s===ranked[0].s);
+  $("winner").innerHTML = top.length > 1 ? `Ничья!` : `Победа: <span style="color:${top[0].hex}">${top[0].name}</span>`;
+  const heights = [150,110,80,60], place = [1,0,2,3];
+  $("podium").innerHTML = place.filter(k=>k<ranked.length).map(k=>{
+    const p = ranked[k];
+    return `<div class="step" style="background:${p.hex};height:${heights[k]}px"><b>${p.s}</b><small>${p.name}</small></div>`;
+  }).join("");
+  show("final"); sfx.win(); confetti(top[0].hex);
+}
+
+function confetti(color){
+  if(matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const c = $("confetti"), g = c.getContext("2d");
+  c.width = innerWidth*devicePixelRatio; c.height = innerHeight*devicePixelRatio; g.scale(devicePixelRatio,devicePixelRatio);
+  const cols = [color,"#fff","#FFC93C","#4DA8FF","#2BD99A","#FF5E57"];
+  const bits = Array.from({length:160},()=>({x:innerWidth/2, y:innerHeight*.35, vx:rnd(-7,7), vy:rnd(-13,-4), r:rnd(4,8), a:rnd(0,6), va:rnd(-.3,.3), c:pick(cols)}));
+  let t = 0;
+  (function frame(){
+    g.clearRect(0,0,innerWidth,innerHeight);
+    bits.forEach(b=>{ b.vy += .35; b.x += b.vx; b.y += b.vy; b.a += b.va;
+      g.save(); g.translate(b.x,b.y); g.rotate(b.a); g.fillStyle=b.c; g.fillRect(-b.r/2,-b.r/4,b.r,b.r/2); g.restore(); });
+    if(++t < 220) requestAnimationFrame(frame); else g.clearRect(0,0,innerWidth,innerHeight);
+  })();
+}
+
+$("start").onclick = ()=>{ beep(700,.08); game(); };
+$("again").onclick = ()=>{ show("menu"); };
+$("quit").onclick = ()=>{ playing = false; finishRound(null); onPress = null; show("menu"); };
+</script>
+</body>
+</html>
